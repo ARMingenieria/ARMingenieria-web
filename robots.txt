@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://arm-ingenieria.com/sitemap.xml
