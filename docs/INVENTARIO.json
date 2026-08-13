@@ -1,0 +1,150 @@
+{
+  "previous_inventory": [
+    {
+      "path": ".env.example",
+      "bytes": 241
+    },
+    {
+      "path": ".gitignore",
+      "bytes": 108
+    },
+    {
+      "path": "README.md",
+      "bytes": 1867
+    },
+    {
+      "path": "_headers",
+      "bytes": 447
+    },
+    {
+      "path": "_redirects",
+      "bytes": 135
+    },
+    {
+      "path": "acceso/index.html",
+      "bytes": 4971
+    },
+    {
+      "path": "admin/index.html",
+      "bytes": 5278
+    },
+    {
+      "path": "aplicaciones/arm-cad/index.html",
+      "bytes": 3884
+    },
+    {
+      "path": "aplicaciones/index.html",
+      "bytes": 4803
+    },
+    {
+      "path": "assets/css/styles.css",
+      "bytes": 17589
+    },
+    {
+      "path": "assets/img/arm-cad-preview.webp",
+      "bytes": 111278
+    },
+    {
+      "path": "assets/img/arm-logo.png",
+      "bytes": 454274
+    },
+    {
+      "path": "assets/img/favicon.png",
+      "bytes": 41885
+    },
+    {
+      "path": "assets/img/hero-grid.svg",
+      "bytes": 618
+    },
+    {
+      "path": "assets/js/app.js",
+      "bytes": 5161
+    },
+    {
+      "path": "blog/index.html",
+      "bytes": 4251
+    },
+    {
+      "path": "cuenta/index.html",
+      "bytes": 5196
+    },
+    {
+      "path": "docs/ARQUITECTURA.md",
+      "bytes": 1517
+    },
+    {
+      "path": "docs/DESPLIEGUE.md",
+      "bytes": 1120
+    },
+    {
+      "path": "functions/api/health.js",
+      "bytes": 141
+    },
+    {
+      "path": "functions/api/usage-event.js",
+      "bytes": 376
+    },
+    {
+      "path": "guias/index.html",
+      "bytes": 4208
+    },
+    {
+      "path": "index.html",
+      "bytes": 8415
+    },
+    {
+      "path": "index_standalone.html",
+      "bytes": 727838
+    },
+    {
+      "path": "legal/aviso-legal.html",
+      "bytes": 4072
+    },
+    {
+      "path": "legal/cookies.html",
+      "bytes": 3786
+    },
+    {
+      "path": "legal/privacidad.html",
+      "bytes": 4004
+    },
+    {
+      "path": "recuperar-contrasena/index.html",
+      "bytes": 3745
+    },
+    {
+      "path": "registro/index.html",
+      "bytes": 8726
+    },
+    {
+      "path": "robots.txt",
+      "bytes": 141
+    },
+    {
+      "path": "sitemap.xml",
+      "bytes": 385
+    },
+    {
+      "path": "supabase/schema.sql",
+      "bytes": 6944
+    },
+    {
+      "path": "wrangler.toml",
+      "bytes": 85
+    }
+  ],
+  "version": "5.1",
+  "supabase_integration": true,
+  "new_files": [
+    "assets/js/config.js",
+    "assets/js/supabase-client.js",
+    "functions/api/public-config.js",
+    "actualizar-contrasena/index.html",
+    "supabase/promote-first-admin.sql",
+    "supabase/check-installation.sql",
+    "docs/SUPABASE_SETUP.md"
+  ],
+  "removed_files": [
+    "functions/api/usage-event.js (replaced by authenticated Supabase RPC record_usage_event)"
+  ]
+}

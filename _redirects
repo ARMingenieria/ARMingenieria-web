@@ -1,0 +1,7 @@
+/login /acceso/ 301
+/register /registro/ 301
+/password-reset /recuperar-contrasena/ 301
+/account /cuenta/ 301
+/apps /aplicaciones/ 301
+
+/update-password /actualizar-contrasena/ 301

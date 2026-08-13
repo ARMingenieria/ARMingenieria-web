@@ -1,32 +1,31 @@
-# ARM Ingeniería Web v2.0.2
+# ARM Platform Core v5.3 — Supabase
 
-Dominio: https://arm-ingenieria.com
+Base modular con autenticación real preparada para Cloudflare Pages y Supabase.
 
-## Estructura
+## Incluye
 
-- `/` Web corporativa
-- `/software/` Biblioteca de software
-- `/software/hvac-pro18/` Ficha de la primera aplicación
-- `/software/hvac-pro18/app.html` Aplicación HVAC PRO18
-- `/guias/` Biblioteca de guías
-- `/blog/` Blog técnico
+- Supabase Auth: registro, confirmación, acceso, cierre de sesión y recuperación.
+- Perfil profesional creado automáticamente desde `auth.users`.
+- Solicitud Partner pendiente de validación.
+- Roles `user` y `admin`, estados de cuenta y permisos por aplicación.
+- RLS en todas las tablas expuestas.
+- ARM CAD publicado para usuarios registrados mediante `can_access_application`.
+- Registro de uso y panel administrador con métricas.
+- Configuración pública por Cloudflare Function `/api/public-config`.
+- SQL de instalación, promoción del primer administrador y comprobación.
 
-## Cómo publicar un artículo
+## Activación
 
-1. Copia `blog/plantilla-articulo.html`.
-2. Crea una carpeta, por ejemplo: `blog/gasolina-sintetica-aire-agua/`.
-3. Guarda el archivo como `blog/gasolina-sintetica-aire-agua/index.html`.
-4. Añade una tarjeta en `blog/index.html`.
-5. Añade la URL al `sitemap.xml`.
+Lee `docs/SUPABASE_SETUP.md`. La aplicación no puede conectarse hasta introducir la Project URL y la Publishable key de un proyecto Supabase.
 
-## Cómo añadir una nueva app
+## Estado validado
 
-1. Crea carpeta en `software/nombre-app/`.
-2. Añade `index.html` como ficha.
-3. Añade `app.html` como aplicación.
-4. Añade su guía en `guias/nombre-app/`.
-5. Actualiza `software/index.html`, `guias/index.html` y `sitemap.xml`.
+Se ha realizado validación estática de estructura, JavaScript y SQL. No se ha podido completar una prueba funcional contra Supabase porque este ZIP no contiene credenciales de ningún proyecto real.
 
-## GitHub Pages
+## Seguridad
 
-Subir todo el contenido del ZIP a la raíz del repositorio. El archivo `CNAME` debe permanecer en la raíz.
+- La Publishable key es pública y solo funciona correctamente con RLS.
+- No se incluye ni se necesita ninguna Secret key en el navegador.
+- El rol administrador no puede asignarse desde el registro.
+- El acceso de datos se controla en PostgreSQL, no solo ocultando botones.
+- ARM CAD real todavía no está incluido: su protección de código se desarrolla en la fase siguiente.
