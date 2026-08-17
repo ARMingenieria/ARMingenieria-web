@@ -19,3 +19,10 @@
 button:disabled{cursor:wait;opacity:.68}
 .data-table td small{display:block;margin-top:3px;color:var(--muted);font-size:11px}
 .config-warning{padding:14px;border:1px solid #f2d48e;background:#fff9e9;border-radius:14px;color:#72530b}
+
+/* ARM Platform v5.4 — cuenta y administración */
+.admin-select{min-width:118px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);padding:8px 10px;font:inherit;font-size:12px}
+.admin-actions{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.tool-icon-mini{display:grid;place-items:center;flex:0 0 48px;width:48px;height:48px;border-radius:13px;background:#e8f6f6;color:var(--teal);font-size:22px;font-weight:900}
+[data-admin-only][hidden]{display:none!important}
+@media(max-width:780px){.admin-select{min-width:105px}.admin-actions{min-width:135px}.data-table{min-width:900px}}

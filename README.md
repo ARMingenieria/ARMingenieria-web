@@ -1,31 +1,23 @@
-# ARM Platform Core v5.3 — Supabase
+# ARM Platform Core v5.4
 
-Base modular con autenticación real preparada para Cloudflare Pages y Supabase.
+Base pública de ARM Ingeniería con autenticación real Supabase, área privada, protección de herramientas y administración operativa.
 
-## Incluye
+## Novedades v5.4
 
-- Supabase Auth: registro, confirmación, acceso, cierre de sesión y recuperación.
-- Perfil profesional creado automáticamente desde `auth.users`.
-- Solicitud Partner pendiente de validación.
-- Roles `user` y `admin`, estados de cuenta y permisos por aplicación.
-- RLS en todas las tablas expuestas.
-- ARM CAD publicado para usuarios registrados mediante `can_access_application`.
-- Registro de uso y panel administrador con métricas.
-- Configuración pública por Cloudflare Function `/api/public-config`.
-- SQL de instalación, promoción del primer administrador y comprobación.
+- Área privada de usuario conectada a su perfil real.
+- Catálogo de herramientas disponible calculado según permisos de Supabase.
+- Enlace de administración visible únicamente para administradores.
+- Protección de ARM CAD por sesión + permiso de aplicación.
+- Panel administrativo con usuarios, estados, roles, actividad y solicitudes Partner.
+- Gestión individual de acceso a ARM CAD.
+- Auditoría de acciones administrativas.
+- Migración incremental: `supabase/migration-v5.4-admin.sql`.
 
-## Activación
+## Despliegue
 
-Lee `docs/SUPABASE_SETUP.md`. La aplicación no puede conectarse hasta introducir la Project URL y la Publishable key de un proyecto Supabase.
+1. Sustituir en el repositorio web el contenido por esta versión conservando `.git` y `CNAME`.
+2. Ejecutar una sola vez `supabase/migration-v5.4-admin.sql` en Supabase.
+3. Promover la primera cuenta con `supabase/promote-first-admin.sql`.
+4. Commit + Push a GitHub.
 
-## Estado validado
-
-Se ha realizado validación estática de estructura, JavaScript y SQL. No se ha podido completar una prueba funcional contra Supabase porque este ZIP no contiene credenciales de ningún proyecto real.
-
-## Seguridad
-
-- La Publishable key es pública y solo funciona correctamente con RLS.
-- No se incluye ni se necesita ninguna Secret key en el navegador.
-- El rol administrador no puede asignarse desde el registro.
-- El acceso de datos se controla en PostgreSQL, no solo ocultando botones.
-- ARM CAD real todavía no está incluido: su protección de código se desarrolla en la fase siguiente.
+La Publishable Key incluida en `assets/js/config.js` es pública por diseño. No hay Secret Key ni `service_role` en el frontend.
