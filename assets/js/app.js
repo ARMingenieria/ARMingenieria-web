@@ -58,6 +58,63 @@
     qa('[data-account-created]').forEach(x=>x.textContent=profile?.created_at?new Intl.DateTimeFormat('es-ES',{dateStyle:'medium'}).format(new Date(profile.created_at)):'—');
     qa('[data-last-access]').forEach(x=>x.textContent=user?.last_sign_in_at?new Intl.DateTimeFormat('es-ES',{dateStyle:'short',timeStyle:'short'}).format(new Date(user.last_sign_in_at)):'—');
   }
+
+  let accountPopover=null, accountMenuTrigger=null;
+  function ensureAccountPopover(){
+    if(accountPopover)return accountPopover;
+    const pop=document.createElement('div');
+    pop.className='account-popover'; pop.hidden=true; pop.setAttribute('role','menu');
+    pop.innerHTML=`<div class="account-menu-name"><strong data-menu-user-name>Cuenta ARM</strong><small data-menu-user-email>—</small></div>
+      <a role="menuitem" href="${route('cuenta/index.html')}">Mi cuenta</a>
+      <a role="menuitem" data-menu-admin hidden href="${route('admin/index.html')}">Administración</a>
+      <div class="menu-sep"></div>
+      <button role="menuitem" class="danger" data-menu-logout type="button">Cerrar sesión</button>`;
+    document.body.appendChild(pop);
+    pop.querySelector('[data-menu-logout]')?.addEventListener('click',async()=>{
+      const c=await clientOrMessage(); if(!c)return;
+      const {error}=await c.auth.signOut();
+      if(error){show(error.message,'error');return;}
+      closeAccountMenu(); location.href=route('index.html');
+    });
+    accountPopover=pop; return pop;
+  }
+  function positionAccountMenu(trigger){
+    const pop=ensureAccountPopover(), r=trigger.getBoundingClientRect(), margin=10;
+    pop.hidden=false;
+    const width=Math.max(210,pop.getBoundingClientRect().width||230);
+    const left=Math.min(window.innerWidth-width-margin,Math.max(margin,r.right-width));
+    const top=Math.min(window.innerHeight-20,r.bottom+8);
+    pop.style.left=`${left}px`; pop.style.top=`${top}px`;
+  }
+  function openAccountMenu(trigger){
+    if(!session)return;
+    const pop=ensureAccountPopover();
+    pop.querySelector('[data-menu-user-name]').textContent=`${profile?.first_name||'Cuenta'} ${profile?.last_name||''}`.trim();
+    pop.querySelector('[data-menu-user-email]').textContent=user?.email||'';
+    const admin=pop.querySelector('[data-menu-admin]'); if(admin)admin.hidden=profile?.account_role!=='admin';
+    accountMenuTrigger=trigger; positionAccountMenu(trigger); trigger.setAttribute('aria-expanded','true');
+  }
+  function closeAccountMenu(){
+    if(accountPopover)accountPopover.hidden=true;
+    if(accountMenuTrigger)accountMenuTrigger.setAttribute('aria-expanded','false');
+    accountMenuTrigger=null;
+  }
+  function bindAccountMenus(){
+    qa('.user-chip').forEach(chip=>{
+      if(chip.dataset.accountMenuBound==='1')return;
+      chip.dataset.accountMenuBound='1'; chip.setAttribute('aria-haspopup','menu'); chip.setAttribute('aria-expanded','false');
+      chip.addEventListener('click',e=>{
+        if(!session)return;
+        e.preventDefault(); e.stopPropagation();
+        if(accountPopover&&!accountPopover.hidden&&accountMenuTrigger===chip)closeAccountMenu();
+        else{closeAccountMenu();openAccountMenu(chip);}
+      });
+    });
+  }
+  document.addEventListener('click',e=>{if(accountPopover&&!accountPopover.hidden&&!accountPopover.contains(e.target)&&!e.target.closest('.user-chip'))closeAccountMenu();});
+  window.addEventListener('resize',()=>{if(accountPopover&&!accountPopover.hidden&&accountMenuTrigger)positionAccountMenu(accountMenuTrigger)});
+  window.addEventListener('scroll',()=>{if(accountPopover&&!accountPopover.hidden)closeAccountMenu()},{passive:true});
+
   async function redirectGuards(){
     if(body.hasAttribute('data-requires-auth')&&!session){location.replace(route(`acceso/index.html?returnTo=${encodeURIComponent(body.dataset.authReturn||'cuenta/index.html')}`));return false}
     if(session&&profile?.account_status&&profile.account_status!=='active'){
@@ -153,7 +210,7 @@
     profile=Array.isArray(data)?data[0]:data;updateUserUI();formMessage(form,'Perfil actualizado correctamente.','success');
   });
 
-  qa('[data-logout]').forEach(b=>b.addEventListener('click',async e=>{e.preventDefault();const c=await clientOrMessage();if(c)await c.auth.signOut();location.href=route('index.html')}));
+  qa('[data-logout]').forEach(b=>b.addEventListener('click',async e=>{e.preventDefault();b.disabled=true;const c=await clientOrMessage();if(!c){b.disabled=false;return;}const {error}=await c.auth.signOut();if(error){show(error.message,'error');b.disabled=false;return;}closeAccountMenu();location.href=route('index.html')}));
   qa('[data-tool-open]').forEach(a=>a.addEventListener('click',async e=>{
     e.preventDefault();const dest=a.dataset.returnTo||a.getAttribute('href'),slug=a.dataset.application||'arm-cad';
     const c=await clientOrMessage();if(!c)return;
@@ -249,8 +306,8 @@
   (async()=>{
     notices();await loadAuth();
     if(!(await redirectGuards()))return;
-    updateUserUI();await fillAccount();await fillAdmin();
+    updateUserUI();bindAccountMenus();await fillAccount();await fillAdmin();
     const c=client;
-    c?.auth.onAuthStateChange((_event,nextSession)=>{session=nextSession;user=nextSession?.user||null;if(!nextSession)profile=null;updateUserUI()});
+    c?.auth.onAuthStateChange((_event,nextSession)=>{session=nextSession;user=nextSession?.user||null;if(!nextSession)profile=null;updateUserUI();bindAccountMenus();closeAccountMenu()});
   })();
 })();
