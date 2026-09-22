@@ -1,0 +1,1 @@
+Esta distribución NO incluye assets/js/config.js. Conservar el archivo config.js que ya funciona en producción y NO borrarlo al actualizar. No sustituir por valores de ejemplo.
