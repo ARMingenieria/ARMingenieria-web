@@ -19,3 +19,10 @@
 button:disabled{cursor:wait;opacity:.68}
 .data-table td small{display:block;margin-top:3px;color:var(--muted);font-size:11px}
 .config-warning{padding:14px;border:1px solid #f2d48e;background:#fff9e9;border-radius:14px;color:#72530b}
+
+/* ARM WEB v5.4 — Estado de licencias visible en móvil y escritorio */
+.arm-license-status{display:flex;flex-direction:column;gap:5px;margin-bottom:12px;min-width:175px;font-size:.85rem;line-height:1.35}
+.arm-tier{display:inline-block;align-self:flex-start;border-radius:999px;padding:4px 11px;font-size:.85rem}
+.arm-tier-pro{background:#d9f5eb;color:#075e4e}.arm-tier-free{background:#e9eef3;color:#20384a}
+.arm-admin-actions{display:flex;flex-wrap:wrap;gap:5px}
+@media(max-width:760px){.arm-license-status{min-width:145px}.arm-admin-actions .btn{font-size:.8rem;padding:8px 10px}}

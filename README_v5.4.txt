@@ -1,0 +1,1 @@
+ARM WEB v5.4: Estado FREE/PRO, modalidad y vencimiento en panel. Ejecutar SQL adjunto por separado. Conservar assets/js/config.js existente. La asignación PRO ahora exige mensual/anual y calcula vencimiento en servidor. Las licencias manuales antiguas sin modalidad se muestran como Sin modalidad registrada.

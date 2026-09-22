@@ -199,22 +199,44 @@
     const metrics=await c.rpc('admin_dashboard_metrics');
     if(!metrics.error){const m=metrics.data||{};Object.entries({total_users:m.total_users,active_today:m.active_today,active_30d:m.active_30d,active_365d:m.active_365d,app_opens_30d:m.app_opens_30d,pending_partners:m.pending_partners}).forEach(([key,val])=>qa(`[data-metric="${key}"]`).forEach(x=>x.textContent=String(val??0)))}
     const users=await c.rpc('admin_list_users',{p_limit:100,p_offset:0,p_search:null});
-    const tbody=q('[data-admin-users]');if(tbody&&!users.error){tbody.innerHTML='';(users.data||[]).forEach(row=>{const tr=document.createElement('tr');tr.innerHTML=`<td><strong>${escapeHtml(`${row.first_name||''} ${row.last_name||''}`.trim()||'Sin nombre')}</strong><small>${escapeHtml(row.email||'')}</small></td><td>${escapeHtml(row.professional_role||'—')}</td><td><span class="tag">${escapeHtml(statusLabel[row.account_status]||row.account_status)}</span></td><td>${row.last_sign_in_at?new Intl.DateTimeFormat('es-ES',{dateStyle:'short'}).format(new Date(row.last_sign_in_at)):'—'}</td><td>${Number(row.application_count||0)}</td><td>${escapeHtml(partnerLabel[row.partner_status]||row.partner_status)}</td><td>${escapeHtml(row.account_role)}</td><td><div class="arm-admin-actions"><button class="btn btn-outline btn-small" data-cad-action="allow" data-user-id="${row.id}">Permitir</button> <button class="btn btn-outline btn-small" data-cad-action="block" data-user-id="${row.id}">Bloquear</button> <button class="btn btn-outline btn-small" data-cad-action="free" data-user-id="${row.id}">FREE</button> <button class="btn btn-primary btn-small" data-cad-action="pro" data-user-id="${row.id}">PRO…</button></div></td>`;tbody.appendChild(tr)});if(!tbody.children.length)tbody.innerHTML='<tr><td colspan="8"><div class="empty-state">Todavía no hay usuarios.</div></td></tr>'}
+    // La licencia se lee directamente de Supabase (RLS permite SELECT al administrador).
+    const [cadApp,licenses,accesses]=await Promise.all([
+      c.from('applications').select('id').eq('slug','arm-cad').maybeSingle(),
+      c.from('user_licenses').select('user_id,application_id,tier,billing_period,starts_at,expires_at'),
+      c.from('user_application_access').select('user_id,application_id,status,expires_at')
+    ]);
+    if(cadApp.error||licenses.error||accesses.error){showToast('No se pudo consultar el estado de licencias. Comprueba la migración v5.4 y los permisos de administrador.');}
+    const appId=cadApp.data?.id;
+    const licenseMap=new Map((licenses.data||[]).filter(x=>x.application_id===appId).map(x=>[x.user_id,x]));
+    const accessMap=new Map((accesses.data||[]).filter(x=>x.application_id===appId).map(x=>[x.user_id,x]));
+    const fmtDate=(v)=>v?new Intl.DateTimeFormat('es-ES',{day:'2-digit',month:'2-digit',year:'numeric',timeZone:'Europe/Madrid'}).format(new Date(v)):'—';
+    const licenseCell=(id)=>{
+      const lic=licenseMap.get(id),access=accessMap.get(id),blocked=access?.status==='blocked';
+      const expired=lic?.tier==='pro'&&lic?.expires_at&&new Date(lic.expires_at)<=new Date();
+      const pro=lic?.tier==='pro'&&!expired;
+      const tier=pro?'PRO':expired?'PRO vencido':'FREE';
+      const period=lic?.billing_period==='yearly'?'Anual':lic?.billing_period==='monthly'?'Mensual':lic?.tier==='pro'?'Sin modalidad registrada':'—';
+      const end=lic?.expires_at?fmtDate(lic.expires_at):'Sin vencimiento';
+      return `<div class="arm-license-status"><strong class="arm-tier ${pro?'arm-tier-pro':'arm-tier-free'}">${tier}</strong><span>${blocked?'Acceso bloqueado':'Acceso permitido'}</span><span>Modalidad: ${period}</span><span>Vencimiento: ${lic?.tier==='pro'?end:'—'}</span></div>`;
+    };
+    const tbody=q('[data-admin-users]');if(tbody&&!users.error){tbody.innerHTML='';(users.data||[]).forEach(row=>{const tr=document.createElement('tr');tr.innerHTML=`<td><strong>${escapeHtml(`${row.first_name||''} ${row.last_name||''}`.trim()||'Sin nombre')}</strong><small>${escapeHtml(row.email||'')}</small></td><td>${escapeHtml(row.professional_role||'—')}</td><td><span class="tag">${escapeHtml(statusLabel[row.account_status]||row.account_status)}</span></td><td>${row.last_sign_in_at?new Intl.DateTimeFormat('es-ES',{dateStyle:'short'}).format(new Date(row.last_sign_in_at)):'—'}</td><td>${Number(row.application_count||0)}</td><td>${escapeHtml(partnerLabel[row.partner_status]||row.partner_status)}</td><td>${escapeHtml(row.account_role)}</td><td>${licenseCell(row.id)}<div class="arm-admin-actions"><button class="btn btn-outline btn-small" data-cad-action="allow" data-user-id="${row.id}">Permitir</button> <button class="btn btn-outline btn-small" data-cad-action="block" data-user-id="${row.id}">Bloquear</button> <button class="btn btn-outline btn-small" data-cad-action="free" data-user-id="${row.id}">FREE</button> <button class="btn btn-primary btn-small" data-cad-action="pro" data-user-id="${row.id}">PRO…</button></div></td>`;tbody.appendChild(tr)});if(!tbody.children.length)tbody.innerHTML='<tr><td colspan="8"><div class="empty-state">Todavía no hay usuarios.</div></td></tr>'}
     qa('[data-cad-action]',tbody).forEach(btn=>btn.addEventListener('click',async()=>{
       const action=btn.dataset.cadAction,id=btn.dataset.userId;
-      let expires=null;
+      let expires=null,period=null;
       if(action==='pro'){
-        const date=prompt('Fecha de caducidad PRO (AAAA-MM-DD). Debe ser futura.');
-        if(!date)return;
-        if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date+'T23:59:59'))){showToast('Introduce una fecha válida.');return}
-        expires=new Date(date+'T23:59:59').toISOString();
-        if(Date.parse(expires)<=Date.now()){showToast('La fecha debe ser futura.');return}
+        const choice=prompt('Modalidad PRO: escribe 1 para MENSUAL (7,99 €) o 2 para ANUAL (49,99 €).','2');
+        if(choice===null)return;
+        if(!['1','2'].includes(choice.trim())){showToast('Elige 1 o 2.');return}
+        period=choice.trim()==='1'?'monthly':'yearly';
+        const preview=new Date();
+        if(period==='monthly')preview.setMonth(preview.getMonth()+1);else preview.setFullYear(preview.getFullYear()+1);
+        if(!confirm(`Se activará PRO ${period==='monthly'?'MENSUAL':'ANUAL'} hasta aproximadamente el ${fmtDate(preview)}. ¿Continuar?`))return;
       }
       if(!confirm(`¿Confirmar ${action.toUpperCase()} para este usuario?`))return;
       btn.disabled=true;
-      const {error}=await c.rpc('admin_manage_armcad_user',{p_user_id:id,p_action:action,p_expires_at:expires});
+      const {error}=await c.rpc('admin_manage_armcad_user_v54',{p_user_id:id,p_action:action,p_period:period});
       if(error){showToast('No se pudo actualizar: '+errorText(error));btn.disabled=false;return}
-      showToast('Permisos ARM CAD actualizados.');await fillAdmin();
+      showToast('Licencia actualizada.');await fillAdmin();
     }));
     const payments=await c.rpc('admin_list_payment_requests',{p_status:'pending',p_limit:100});
     const payBody=q('[data-admin-payments]');if(payBody&&!payments.error){payBody.innerHTML='';(payments.data||[]).forEach(row=>{const tr=document.createElement('tr');tr.innerHTML=`<td><strong>${escapeHtml(row.reference)}</strong></td><td><strong>${escapeHtml(row.customer_name||'Sin nombre')}</strong><small>${escapeHtml(row.email||'')}</small></td><td>${escapeHtml(row.application_name)}</td><td>${row.billing_period==='yearly'?'Anual':'Mensual'}</td><td>${(Number(row.amount_cents)/100).toLocaleString('es-ES',{style:'currency',currency:'EUR'})}</td><td>${row.method==='bizum'?'Bizum':'Transferencia'}</td><td>${new Intl.DateTimeFormat('es-ES',{dateStyle:'short',timeStyle:'short'}).format(new Date(row.requested_at))}</td><td><button class="btn btn-primary btn-small" data-payment-review="${row.id}" data-approve="true">Validar</button> <button class="btn btn-outline btn-small" data-payment-review="${row.id}" data-approve="false">Rechazar</button></td>`;payBody.appendChild(tr)});if(!payBody.children.length)payBody.innerHTML='<tr><td colspan="8"><div class="empty-state">No hay pagos pendientes.</div></td></tr>';qa('[data-payment-review]',payBody).forEach(btn=>btn.addEventListener('click',async()=>{btn.disabled=true;const {error}=await c.rpc('admin_review_payment_request',{p_request_id:btn.dataset.paymentReview,p_approve:btn.dataset.approve==='true',p_notes:null});if(error){showToast(errorText(error));btn.disabled=false;return}showToast(btn.dataset.approve==='true'?'Pago validado y PRO activado.':'Solicitud rechazada.');await fillAdmin()}))}
