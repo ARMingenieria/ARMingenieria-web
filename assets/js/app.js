@@ -48,7 +48,7 @@
     const full=`${profile?.first_name||''} ${profile?.last_name||''}`.trim()||name;
     qa('[data-user-name]').forEach(x=>x.textContent=name);
     qa('[data-user-initials]').forEach(x=>x.textContent=initials(full));
-    qa('[data-auth-only]').forEach(x=>x.hidden=!session);
+    qa('[data-auth-only]').forEach(x=>x.hidden=!session);qa('[data-admin-only]').forEach(x=>x.hidden=profile?.account_role!=='admin');
     qa('[data-guest-only]').forEach(x=>x.hidden=!!session);
     qa('[data-profile-email]').forEach(x=>x.textContent=user?.email||'—');
     qa('[data-profile-role]').forEach(x=>x.textContent=profile?.professional_role||'Sin completar');
@@ -199,7 +199,23 @@
     const metrics=await c.rpc('admin_dashboard_metrics');
     if(!metrics.error){const m=metrics.data||{};Object.entries({total_users:m.total_users,active_today:m.active_today,active_30d:m.active_30d,active_365d:m.active_365d,app_opens_30d:m.app_opens_30d,pending_partners:m.pending_partners}).forEach(([key,val])=>qa(`[data-metric="${key}"]`).forEach(x=>x.textContent=String(val??0)))}
     const users=await c.rpc('admin_list_users',{p_limit:100,p_offset:0,p_search:null});
-    const tbody=q('[data-admin-users]');if(tbody&&!users.error){tbody.innerHTML='';(users.data||[]).forEach(row=>{const tr=document.createElement('tr');tr.innerHTML=`<td><strong>${escapeHtml(`${row.first_name||''} ${row.last_name||''}`.trim()||'Sin nombre')}</strong><small>${escapeHtml(row.email||'')}</small></td><td>${escapeHtml(row.professional_role||'—')}</td><td><span class="tag">${escapeHtml(statusLabel[row.account_status]||row.account_status)}</span></td><td>${row.last_sign_in_at?new Intl.DateTimeFormat('es-ES',{dateStyle:'short'}).format(new Date(row.last_sign_in_at)):'—'}</td><td>${Number(row.application_count||0)}</td><td>${escapeHtml(partnerLabel[row.partner_status]||row.partner_status)}</td><td>${escapeHtml(row.account_role)}</td>`;tbody.appendChild(tr)});if(!tbody.children.length)tbody.innerHTML='<tr><td colspan="7"><div class="empty-state">Todavía no hay usuarios.</div></td></tr>'}
+    const tbody=q('[data-admin-users]');if(tbody&&!users.error){tbody.innerHTML='';(users.data||[]).forEach(row=>{const tr=document.createElement('tr');tr.innerHTML=`<td><strong>${escapeHtml(`${row.first_name||''} ${row.last_name||''}`.trim()||'Sin nombre')}</strong><small>${escapeHtml(row.email||'')}</small></td><td>${escapeHtml(row.professional_role||'—')}</td><td><span class="tag">${escapeHtml(statusLabel[row.account_status]||row.account_status)}</span></td><td>${row.last_sign_in_at?new Intl.DateTimeFormat('es-ES',{dateStyle:'short'}).format(new Date(row.last_sign_in_at)):'—'}</td><td>${Number(row.application_count||0)}</td><td>${escapeHtml(partnerLabel[row.partner_status]||row.partner_status)}</td><td>${escapeHtml(row.account_role)}</td><td><div class="arm-admin-actions"><button class="btn btn-outline btn-small" data-cad-action="allow" data-user-id="${row.id}">Permitir</button> <button class="btn btn-outline btn-small" data-cad-action="block" data-user-id="${row.id}">Bloquear</button> <button class="btn btn-outline btn-small" data-cad-action="free" data-user-id="${row.id}">FREE</button> <button class="btn btn-primary btn-small" data-cad-action="pro" data-user-id="${row.id}">PRO…</button></div></td>`;tbody.appendChild(tr)});if(!tbody.children.length)tbody.innerHTML='<tr><td colspan="8"><div class="empty-state">Todavía no hay usuarios.</div></td></tr>'}
+    qa('[data-cad-action]',tbody).forEach(btn=>btn.addEventListener('click',async()=>{
+      const action=btn.dataset.cadAction,id=btn.dataset.userId;
+      let expires=null;
+      if(action==='pro'){
+        const date=prompt('Fecha de caducidad PRO (AAAA-MM-DD). Debe ser futura.');
+        if(!date)return;
+        if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date+'T23:59:59'))){showToast('Introduce una fecha válida.');return}
+        expires=new Date(date+'T23:59:59').toISOString();
+        if(Date.parse(expires)<=Date.now()){showToast('La fecha debe ser futura.');return}
+      }
+      if(!confirm(`¿Confirmar ${action.toUpperCase()} para este usuario?`))return;
+      btn.disabled=true;
+      const {error}=await c.rpc('admin_manage_armcad_user',{p_user_id:id,p_action:action,p_expires_at:expires});
+      if(error){showToast('No se pudo actualizar: '+errorText(error));btn.disabled=false;return}
+      showToast('Permisos ARM CAD actualizados.');await fillAdmin();
+    }));
     const payments=await c.rpc('admin_list_payment_requests',{p_status:'pending',p_limit:100});
     const payBody=q('[data-admin-payments]');if(payBody&&!payments.error){payBody.innerHTML='';(payments.data||[]).forEach(row=>{const tr=document.createElement('tr');tr.innerHTML=`<td><strong>${escapeHtml(row.reference)}</strong></td><td><strong>${escapeHtml(row.customer_name||'Sin nombre')}</strong><small>${escapeHtml(row.email||'')}</small></td><td>${escapeHtml(row.application_name)}</td><td>${row.billing_period==='yearly'?'Anual':'Mensual'}</td><td>${(Number(row.amount_cents)/100).toLocaleString('es-ES',{style:'currency',currency:'EUR'})}</td><td>${row.method==='bizum'?'Bizum':'Transferencia'}</td><td>${new Intl.DateTimeFormat('es-ES',{dateStyle:'short',timeStyle:'short'}).format(new Date(row.requested_at))}</td><td><button class="btn btn-primary btn-small" data-payment-review="${row.id}" data-approve="true">Validar</button> <button class="btn btn-outline btn-small" data-payment-review="${row.id}" data-approve="false">Rechazar</button></td>`;payBody.appendChild(tr)});if(!payBody.children.length)payBody.innerHTML='<tr><td colspan="8"><div class="empty-state">No hay pagos pendientes.</div></td></tr>';qa('[data-payment-review]',payBody).forEach(btn=>btn.addEventListener('click',async()=>{btn.disabled=true;const {error}=await c.rpc('admin_review_payment_request',{p_request_id:btn.dataset.paymentReview,p_approve:btn.dataset.approve==='true',p_notes:null});if(error){showToast(errorText(error));btn.disabled=false;return}showToast(btn.dataset.approve==='true'?'Pago validado y PRO activado.':'Solicitud rechazada.');await fillAdmin()}))}
     const partners=await c.rpc('admin_list_partner_applications',{p_limit:50,p_offset:0});

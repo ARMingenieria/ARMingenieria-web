@@ -1,0 +1,1 @@
+ARM WEB v5.3 PUBLICA: Panel administrador de acceso/licencias; NO contiene motor CAD. Ejecutar SQL por separado en Supabase. Para no exponer el motor CAD y las restricciones comerciales, la prueba de integración se entrega en un ZIP separado, SOLO PARA ENTORNO PRIVADO. El correo automático requiere backend Cloudflare/Resend: GitHub Pages no ejecuta functions/.
