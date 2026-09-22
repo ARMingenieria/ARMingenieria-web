@@ -2,7 +2,7 @@
 // La URL y la Publishable Key pueden estar en el navegador: la seguridad real depende de RLS.
 // En Cloudflare Pages se recomienda configurar las variables y usar /api/public-config.
 window.ARM_CONFIG = Object.freeze({
-  supabaseUrl: 'https://TU_PROYECTO.supabase.co',
-  supabasePublishableKey: 'sb_publishable_REEMPLAZAR',
+  supabaseUrl: 'https://odgpqgfkvrnexzsqrzus.supabase.co/rest/v1/',
+  supabasePublishableKey: 'sb_publishable_UsxgoRc17ybij9rgOfDAPw_6Uz4N5dr',
   siteUrl: 'https://arm-ingenieria.com'
 });
