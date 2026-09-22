@@ -1,30 +1,40 @@
-# ARM Platform Core v5.5
+# ARM Platform Core v5.2 — Supabase
 
-Base pública de ARM Ingeniería con autenticación real Supabase, área privada, protección de herramientas y administración operativa.
+Base modular con autenticación real preparada para Cloudflare Pages y Supabase.
 
-## Novedades v5.5
+## Incluye
 
-- Área privada de usuario conectada a su perfil real.
-- Catálogo de herramientas disponible calculado según permisos de Supabase.
-- Enlace de administración visible únicamente para administradores.
-- Protección de ARM CAD por sesión + permiso de aplicación.
-- Panel administrativo con usuarios, estados, roles, actividad y solicitudes Partner.
-- Gestión individual de acceso a ARM CAD.
-- Auditoría de acciones administrativas.
-- Migración incremental: `supabase/migration-v5.5-admin.sql`.
+- Supabase Auth: registro, confirmación, acceso, cierre de sesión y recuperación.
+- Perfil profesional creado automáticamente desde `auth.users`.
+- Solicitud Partner pendiente de validación.
+- Roles `user` y `admin`, estados de cuenta y permisos por aplicación.
+- RLS en todas las tablas expuestas.
+- ARM CAD publicado para usuarios registrados mediante `can_access_application`.
+- Registro de uso y panel administrador con métricas.
+- Configuración pública por Cloudflare Function `/api/public-config`.
+- SQL de instalación, promoción del primer administrador y comprobación.
 
-## Despliegue
+## Activación
 
-1. Sustituir en el repositorio web el contenido por esta versión conservando `.git` y `CNAME`.
-2. Ejecutar una sola vez `supabase/migration-v5.5-admin.sql` en Supabase.
-3. Promover la primera cuenta con `supabase/promote-first-admin.sql`.
-4. Commit + Push a GitHub.
+Lee `docs/SUPABASE_SETUP.md`. La aplicación no puede conectarse hasta introducir la Project URL y la Publishable key de un proyecto Supabase.
 
-La Publishable Key incluida en `assets/js/config.js` es pública por diseño. No hay Secret Key ni `service_role` en el frontend.
+## Estado validado
 
+Se ha realizado validación estática de estructura, JavaScript y SQL. No se ha podido completar una prueba funcional contra Supabase porque este ZIP no contiene credenciales de ningún proyecto real.
 
-## v5.5
-- Corregido el botón de cuenta vacío en móvil.
-- Menú de cuenta accesible desde el avatar.
-- Cerrar sesión visible también dentro de Mi cuenta en móvil.
-- Acceso a Administración visible solo para perfiles admin.
+## Seguridad
+
+- La Publishable key es pública y solo funciona correctamente con RLS.
+- No se incluye ni se necesita ninguna Secret key en el navegador.
+- El rol administrador no puede asignarse desde el registro.
+- El acceso de datos se controla en PostgreSQL, no solo ocultando botones.
+- ARM CAD real todavía no está incluido: su protección de código se desarrolla en la fase siguiente.
+
+## v5.2 — Licencias y pagos
+
+- Licencias por aplicación FREE/PRO.
+- ARM CAD PRO: 7,99 €/mes o 49,99 €/año.
+- Solicitudes manuales Bizum/transferencia con referencia única.
+- Panel admin para validar/rechazar y activar PRO con caducidad.
+- Aviso por email preparado mediante Cloudflare Pages Function + Resend.
+- Para actualizar una instalación v5.1 existente, ejecutar `supabase/migrations/20260921_licenses_payments.sql`.

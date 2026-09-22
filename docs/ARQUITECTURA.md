@@ -1,4 +1,4 @@
-# Arquitectura ARM Platform Core v5.3
+# Arquitectura ARM Platform Core v5.1
 
 ```text
 Navegador

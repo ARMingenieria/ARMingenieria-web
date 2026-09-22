@@ -1,4 +1,4 @@
--- ARM Platform Core v5.1 — Supabase Auth, perfiles, permisos, métricas y administración.
+-- ARM Platform Core v5.2 — Supabase Auth, perfiles, permisos, métricas y administración.
 -- Ejecutar una sola vez en un proyecto de DESARROLLO desde Supabase > SQL Editor.
 
 create extension if not exists pgcrypto;
@@ -255,3 +255,105 @@ grant execute on function public.admin_list_partner_applications(integer,integer
 insert into public.applications(slug,name,description,status,default_access_registered,route,sort_order)
 values('arm-cad','ARM CAD','Entorno CAD 2D online','published',true,'/aplicaciones/arm-cad/',10)
 on conflict(slug) do update set name=excluded.name,description=excluded.description,status=excluded.status,default_access_registered=excluded.default_access_registered,route=excluded.route,sort_order=excluded.sort_order;
+
+
+-- ARM Platform Core v5.2 — Licencias FREE/PRO y pagos manuales.
+do $$ begin create type public.license_tier as enum ('free','pro'); exception when duplicate_object then null; end $$;
+do $$ begin create type public.billing_period as enum ('monthly','yearly'); exception when duplicate_object then null; end $$;
+do $$ begin create type public.payment_method as enum ('bizum','transfer'); exception when duplicate_object then null; end $$;
+do $$ begin create type public.payment_request_status as enum ('pending','approved','rejected','cancelled'); exception when duplicate_object then null; end $$;
+
+create table if not exists public.user_licenses (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  application_id uuid not null references public.applications(id) on delete cascade,
+  tier public.license_tier not null default 'free',
+  starts_at timestamptz,
+  expires_at timestamptz,
+  source text not null default 'registration',
+  updated_at timestamptz not null default now(),
+  primary key(user_id,application_id)
+);
+
+create table if not exists public.payment_requests (
+  id uuid primary key default gen_random_uuid(),
+  reference text unique not null,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  application_id uuid not null references public.applications(id) on delete restrict,
+  tier public.license_tier not null default 'pro' check(tier='pro'),
+  billing_period public.billing_period not null,
+  amount_cents integer not null check(amount_cents>0),
+  currency text not null default 'EUR' check(currency='EUR'),
+  method public.payment_method not null,
+  status public.payment_request_status not null default 'pending',
+  requested_at timestamptz not null default now(),
+  reviewed_at timestamptz,
+  reviewed_by uuid references auth.users(id),
+  admin_notes text
+);
+create index if not exists payment_requests_user_idx on public.payment_requests(user_id,requested_at desc);
+create index if not exists payment_requests_status_idx on public.payment_requests(status,requested_at desc);
+
+create or replace function public.ensure_free_license(p_user uuid,p_app uuid)
+returns void language plpgsql security definer set search_path='' as $$ begin
+  insert into public.user_licenses(user_id,application_id,tier,source) values(p_user,p_app,'free','registration') on conflict(user_id,application_id) do nothing;
+end; $$;
+
+create or replace function public.my_application_license(p_slug text)
+returns table(tier public.license_tier,starts_at timestamptz,expires_at timestamptz,is_pro boolean)
+language plpgsql security definer set search_path='' as $$ declare app_id uuid; begin
+ if auth.uid() is null then raise exception 'authentication required'; end if;
+ select id into app_id from public.applications where slug=p_slug and status='published'; if app_id is null then raise exception 'application unavailable'; end if;
+ perform public.ensure_free_license(auth.uid(),app_id);
+ return query select ul.tier,ul.starts_at,ul.expires_at,(ul.tier='pro' and (ul.expires_at is null or ul.expires_at>now())) from public.user_licenses ul where ul.user_id=auth.uid() and ul.application_id=app_id;
+end; $$;
+
+create or replace function public.create_payment_request(p_slug text,p_period public.billing_period,p_method public.payment_method)
+returns public.payment_requests language plpgsql security definer set search_path='' as $$
+declare app_id uuid; price integer; ref text; result public.payment_requests; begin
+ if auth.uid() is null or not public.is_active_user() then raise exception 'access denied'; end if;
+ select id into app_id from public.applications where slug=p_slug and status='published'; if app_id is null then raise exception 'application unavailable'; end if;
+ if p_slug<>'arm-cad' then raise exception 'pricing unavailable'; end if;
+ price:=case when p_period='monthly' then 799 else 4999 end;
+ ref:='ARM-'||upper(substr(replace(gen_random_uuid()::text,'-',''),1,10));
+ insert into public.payment_requests(reference,user_id,application_id,billing_period,amount_cents,method) values(ref,auth.uid(),app_id,p_period,price,p_method) returning * into result;
+ return result;
+end; $$;
+
+create or replace function public.admin_list_payment_requests(p_status public.payment_request_status default 'pending',p_limit integer default 100)
+returns table(id uuid,reference text,user_id uuid,email text,customer_name text,application_slug text,application_name text,billing_period public.billing_period,amount_cents integer,method public.payment_method,status public.payment_request_status,requested_at timestamptz)
+language plpgsql stable security definer set search_path='' as $$ begin
+ if not public.is_admin() then raise exception 'access denied'; end if;
+ return query select pr.id,pr.reference,pr.user_id,u.email::text,trim(concat_ws(' ',p.first_name,p.last_name)),a.slug,a.name,pr.billing_period,pr.amount_cents,pr.method,pr.status,pr.requested_at from public.payment_requests pr join auth.users u on u.id=pr.user_id join public.profiles p on p.id=pr.user_id join public.applications a on a.id=pr.application_id where p_status is null or pr.status=p_status order by pr.requested_at desc limit least(greatest(coalesce(p_limit,100),1),200);
+end; $$;
+
+create or replace function public.admin_review_payment_request(p_request_id uuid,p_approve boolean,p_notes text default null)
+returns public.payment_requests language plpgsql security definer set search_path='' as $$
+declare pr public.payment_requests; current_exp timestamptz; new_exp timestamptz; begin
+ if not public.is_admin() then raise exception 'access denied'; end if;
+ select * into pr from public.payment_requests where id=p_request_id for update; if pr.id is null then raise exception 'request unavailable'; end if; if pr.status<>'pending' then raise exception 'request already reviewed'; end if;
+ if p_approve then
+   select expires_at into current_exp from public.user_licenses where user_id=pr.user_id and application_id=pr.application_id;
+   new_exp:=greatest(coalesce(current_exp,now()),now()) + case when pr.billing_period='monthly' then interval '1 month' else interval '1 year' end;
+   insert into public.user_licenses(user_id,application_id,tier,starts_at,expires_at,source) values(pr.user_id,pr.application_id,'pro',now(),new_exp,'manual_payment') on conflict(user_id,application_id) do update set tier='pro',starts_at=coalesce(public.user_licenses.starts_at,now()),expires_at=new_exp,source='manual_payment',updated_at=now();
+   update public.payment_requests set status='approved',reviewed_at=now(),reviewed_by=auth.uid(),admin_notes=left(coalesce(p_notes,''),1000) where id=pr.id returning * into pr;
+ else
+   update public.payment_requests set status='rejected',reviewed_at=now(),reviewed_by=auth.uid(),admin_notes=left(coalesce(p_notes,''),1000) where id=pr.id returning * into pr;
+ end if;
+ insert into public.admin_audit_log(admin_user_id,action,target_type,target_id,details) values(auth.uid(),case when p_approve then 'payment_approved' else 'payment_rejected' end,'payment_request',pr.id::text,jsonb_build_object('reference',pr.reference,'user_id',pr.user_id));
+ return pr;
+end; $$;
+
+alter table public.user_licenses enable row level security; alter table public.payment_requests enable row level security;
+do $$ declare r record; begin for r in select schemaname,tablename,policyname from pg_policies where schemaname='public' and tablename in ('user_licenses','payment_requests') loop execute format('drop policy if exists %I on %I.%I',r.policyname,r.schemaname,r.tablename); end loop; end $$;
+create policy licenses_select_own_or_admin on public.user_licenses for select to authenticated using(user_id=(select auth.uid()) or public.is_admin());
+create policy payments_select_own_or_admin on public.payment_requests for select to authenticated using(user_id=(select auth.uid()) or public.is_admin());
+revoke all on public.user_licenses,public.payment_requests from anon,authenticated; grant select on public.user_licenses,public.payment_requests to authenticated;
+revoke execute on function public.ensure_free_license(uuid,uuid) from public,anon,authenticated;
+revoke execute on function public.my_application_license(text) from public,anon;
+revoke execute on function public.create_payment_request(text,public.billing_period,public.payment_method) from public,anon;
+revoke execute on function public.admin_list_payment_requests(public.payment_request_status,integer) from public,anon;
+revoke execute on function public.admin_review_payment_request(uuid,boolean,text) from public,anon;
+grant execute on function public.my_application_license(text) to authenticated;
+grant execute on function public.create_payment_request(text,public.billing_period,public.payment_method) to authenticated;
+grant execute on function public.admin_list_payment_requests(public.payment_request_status,integer) to authenticated;
+grant execute on function public.admin_review_payment_request(uuid,boolean,text) to authenticated;

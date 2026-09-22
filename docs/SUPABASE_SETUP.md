@@ -2,7 +2,7 @@
 
 ## Resultado de esta versión
 
-La versión 5.3 sustituye la sesión ficticia de `localStorage` por Supabase Auth y deja preparados:
+La versión 5.1 sustituye la sesión ficticia de `localStorage` por Supabase Auth y deja preparados:
 
 - registro con correo y contraseña;
 - confirmación del correo;

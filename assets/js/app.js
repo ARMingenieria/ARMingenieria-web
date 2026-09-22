@@ -49,7 +49,6 @@
     qa('[data-user-name]').forEach(x=>x.textContent=name);
     qa('[data-user-initials]').forEach(x=>x.textContent=initials(full));
     qa('[data-auth-only]').forEach(x=>x.hidden=!session);
-    qa('[data-admin-only]').forEach(x=>x.hidden=!(session&&profile?.account_role==='admin'));
     qa('[data-guest-only]').forEach(x=>x.hidden=!!session);
     qa('[data-profile-email]').forEach(x=>x.textContent=user?.email||'—');
     qa('[data-profile-role]').forEach(x=>x.textContent=profile?.professional_role||'Sin completar');
@@ -58,63 +57,6 @@
     qa('[data-account-created]').forEach(x=>x.textContent=profile?.created_at?new Intl.DateTimeFormat('es-ES',{dateStyle:'medium'}).format(new Date(profile.created_at)):'—');
     qa('[data-last-access]').forEach(x=>x.textContent=user?.last_sign_in_at?new Intl.DateTimeFormat('es-ES',{dateStyle:'short',timeStyle:'short'}).format(new Date(user.last_sign_in_at)):'—');
   }
-
-  let accountPopover=null, accountMenuTrigger=null;
-  function ensureAccountPopover(){
-    if(accountPopover)return accountPopover;
-    const pop=document.createElement('div');
-    pop.className='account-popover'; pop.hidden=true; pop.setAttribute('role','menu');
-    pop.innerHTML=`<div class="account-menu-name"><strong data-menu-user-name>Cuenta ARM</strong><small data-menu-user-email>—</small></div>
-      <a role="menuitem" href="${route('cuenta/index.html')}">Mi cuenta</a>
-      <a role="menuitem" data-menu-admin hidden href="${route('admin/index.html')}">Administración</a>
-      <div class="menu-sep"></div>
-      <button role="menuitem" class="danger" data-menu-logout type="button">Cerrar sesión</button>`;
-    document.body.appendChild(pop);
-    pop.querySelector('[data-menu-logout]')?.addEventListener('click',async()=>{
-      const c=await clientOrMessage(); if(!c)return;
-      const {error}=await c.auth.signOut();
-      if(error){show(error.message,'error');return;}
-      closeAccountMenu(); location.href=route('index.html');
-    });
-    accountPopover=pop; return pop;
-  }
-  function positionAccountMenu(trigger){
-    const pop=ensureAccountPopover(), r=trigger.getBoundingClientRect(), margin=10;
-    pop.hidden=false;
-    const width=Math.max(210,pop.getBoundingClientRect().width||230);
-    const left=Math.min(window.innerWidth-width-margin,Math.max(margin,r.right-width));
-    const top=Math.min(window.innerHeight-20,r.bottom+8);
-    pop.style.left=`${left}px`; pop.style.top=`${top}px`;
-  }
-  function openAccountMenu(trigger){
-    if(!session)return;
-    const pop=ensureAccountPopover();
-    pop.querySelector('[data-menu-user-name]').textContent=`${profile?.first_name||'Cuenta'} ${profile?.last_name||''}`.trim();
-    pop.querySelector('[data-menu-user-email]').textContent=user?.email||'';
-    const admin=pop.querySelector('[data-menu-admin]'); if(admin)admin.hidden=profile?.account_role!=='admin';
-    accountMenuTrigger=trigger; positionAccountMenu(trigger); trigger.setAttribute('aria-expanded','true');
-  }
-  function closeAccountMenu(){
-    if(accountPopover)accountPopover.hidden=true;
-    if(accountMenuTrigger)accountMenuTrigger.setAttribute('aria-expanded','false');
-    accountMenuTrigger=null;
-  }
-  function bindAccountMenus(){
-    qa('.user-chip').forEach(chip=>{
-      if(chip.dataset.accountMenuBound==='1')return;
-      chip.dataset.accountMenuBound='1'; chip.setAttribute('aria-haspopup','menu'); chip.setAttribute('aria-expanded','false');
-      chip.addEventListener('click',e=>{
-        if(!session)return;
-        e.preventDefault(); e.stopPropagation();
-        if(accountPopover&&!accountPopover.hidden&&accountMenuTrigger===chip)closeAccountMenu();
-        else{closeAccountMenu();openAccountMenu(chip);}
-      });
-    });
-  }
-  document.addEventListener('click',e=>{if(accountPopover&&!accountPopover.hidden&&!accountPopover.contains(e.target)&&!e.target.closest('.user-chip'))closeAccountMenu();});
-  window.addEventListener('resize',()=>{if(accountPopover&&!accountPopover.hidden&&accountMenuTrigger)positionAccountMenu(accountMenuTrigger)});
-  window.addEventListener('scroll',()=>{if(accountPopover&&!accountPopover.hidden)closeAccountMenu()},{passive:true});
-
   async function redirectGuards(){
     if(body.hasAttribute('data-requires-auth')&&!session){location.replace(route(`acceso/index.html?returnTo=${encodeURIComponent(body.dataset.authReturn||'cuenta/index.html')}`));return false}
     if(session&&profile?.account_status&&profile.account_status!=='active'){
@@ -210,7 +152,7 @@
     profile=Array.isArray(data)?data[0]:data;updateUserUI();formMessage(form,'Perfil actualizado correctamente.','success');
   });
 
-  qa('[data-logout]').forEach(b=>b.addEventListener('click',async e=>{e.preventDefault();b.disabled=true;const c=await clientOrMessage();if(!c){b.disabled=false;return;}const {error}=await c.auth.signOut();if(error){show(error.message,'error');b.disabled=false;return;}closeAccountMenu();location.href=route('index.html')}));
+  qa('[data-logout]').forEach(b=>b.addEventListener('click',async e=>{e.preventDefault();const c=await clientOrMessage();if(c)await c.auth.signOut();location.href=route('index.html')}));
   qa('[data-tool-open]').forEach(a=>a.addEventListener('click',async e=>{
     e.preventDefault();const dest=a.dataset.returnTo||a.getAttribute('href'),slug=a.dataset.application||'arm-cad';
     const c=await clientOrMessage();if(!c)return;
@@ -225,89 +167,52 @@
   function closeModal(){modal?.classList.remove('open');modal?.setAttribute('aria-hidden','true');document.body.style.overflow=''}
 
   async function fillAccount(){
-    const form=q('[data-profile-form]');if(form&&profile){
-      ['first_name','last_name','professional_role','country','province'].forEach(name=>{const input=form.elements[name];if(input)input.value=profile[name]||''});
-    }
-    if(!session)return;
+    const form=q('[data-profile-form]');if(!form||!profile)return;
+    ['first_name','last_name','professional_role','country','province'].forEach(name=>{const input=form.elements[name];if(input)input.value=profile[name]||''});
     const c=await clientOrMessage();if(!c)return;
-    const apps=await c.from('applications').select('slug,name,description,route,public_access_label,status').eq('status','published').order('sort_order');
-    let available=[];
-    if(!apps.error){
-      for(const app of apps.data||[]){const access=await c.rpc('can_access_application',{p_slug:app.slug});if(!access.error&&access.data===true)available.push(app)}
-    }
-    qa('[data-tools-count]').forEach(x=>x.textContent=String(available.length));
-    const list=q('[data-account-tools]');
-    if(list){
-      list.innerHTML='';
-      available.forEach(app=>{
-        const article=document.createElement('article');article.className='tool-row';
-        const href=app.route?route(app.route.replace(/^\//,'')):route(`aplicaciones/${app.slug}/index.html`);
-        article.innerHTML=`<div class="tool-icon-mini">⌁</div><div class="grow"><span class="tag">${escapeHtml(app.public_access_label||'Disponible')}</span><h3>${escapeHtml(app.name)}</h3><p>${escapeHtml(app.description||'Herramienta ARM')}</p></div><a class="btn btn-primary btn-small" href="${escapeHtml(href)}">Abrir</a>`;
-        list.appendChild(article);
-      });
-      if(!available.length)list.innerHTML='<div class="empty-state">No hay herramientas disponibles para esta cuenta.</div>';
-    }
+    const {count}=await c.from('applications').select('*',{count:'exact',head:true}).eq('status','published');
+    qa('[data-tools-count]').forEach(x=>x.textContent=String(count??0));
   }
-  let adminUsersCache=[];
-  const adminStatusOptions={active:'Activa',suspended:'Suspendida',blocked:'Bloqueada'};
-  const adminRoleOptions={user:'Usuario',admin:'Administrador'};
-  const adminPartnerOptions={pending:'Pendiente',under_review:'En revisión',approved:'Aprobado',rejected:'No aprobado',suspended:'Suspendido'};
 
-  async function fillAdmin(search=''){
+  let selectedUpgradePlan='yearly';
+  async function fillLicense(){
+    if(!q('[data-armcad-tier]')||!user)return; const c=await clientOrMessage();if(!c)return;
+    const {data,error}=await c.rpc('my_application_license',{p_slug:'arm-cad'}); if(error){q('[data-armcad-license-text]').textContent='No se ha podido consultar la licencia.';return}
+    const lic=Array.isArray(data)?data[0]:data; const pro=Boolean(lic?.is_pro);
+    q('[data-armcad-tier]').textContent=pro?'PRO':'FREE';
+    q('[data-armcad-license-text]').textContent=pro?`PRO activo${lic.expires_at?' hasta '+new Intl.DateTimeFormat('es-ES',{dateStyle:'long'}).format(new Date(lic.expires_at)):''}.`:'ARM CAD Free activo. Puedes pasar a PRO cuando lo necesites.';
+    qa('[data-upgrade-plan]').forEach(b=>b.hidden=pro);
+  }
+  qa('[data-upgrade-plan]').forEach(b=>b.addEventListener('click',()=>{selectedUpgradePlan=b.dataset.upgradePlan||'yearly';const box=q('[data-payment-box]');if(box){box.hidden=false;box.scrollIntoView({behavior:'smooth',block:'nearest'})}}));
+  q('[data-payment-submit]')?.addEventListener('click',async()=>{
+    const c=await clientOrMessage();if(!c||!user)return; const btn=q('[data-payment-submit]'),msg=q('[data-payment-message]');btn.disabled=true;msg.className='form-message';msg.textContent='Registrando solicitud…';
+    const method=q('[data-payment-method]')?.value||'bizum'; const {data,error}=await c.rpc('create_payment_request',{p_slug:'arm-cad',p_period:selectedUpgradePlan,p_method:method});
+    if(error){btn.disabled=false;msg.className='form-message show error';msg.textContent=errorText(error);return}
+    const pr=Array.isArray(data)?data[0]:data; msg.className='form-message show success';msg.textContent=`Solicitud ${pr.reference} registrada. ARM validará el pago antes de activar PRO.`;
+    try{await fetch('/api/payment-request-notify',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${session.access_token}`},body:JSON.stringify({paymentRequestId:pr.id})})}catch(_e){}
+    btn.disabled=false;
+  });
+
+  async function fillAdmin(){
     if(!body.hasAttribute('data-requires-admin')||profile?.account_role!=='admin')return;
     const c=await clientOrMessage();if(!c)return;
     const metrics=await c.rpc('admin_dashboard_metrics');
     if(!metrics.error){const m=metrics.data||{};Object.entries({total_users:m.total_users,active_today:m.active_today,active_30d:m.active_30d,active_365d:m.active_365d,app_opens_30d:m.app_opens_30d,pending_partners:m.pending_partners}).forEach(([key,val])=>qa(`[data-metric="${key}"]`).forEach(x=>x.textContent=String(val??0)))}
-
-    const users=await c.rpc('admin_list_users',{p_limit:200,p_offset:0,p_search:search||null});
-    const tbody=q('[data-admin-users]');
-    if(tbody){
-      if(users.error){tbody.innerHTML='<tr><td colspan="8"><div class="empty-state">No se pudieron cargar los usuarios.</div></td></tr>'}
-      else{
-        adminUsersCache=users.data||[];renderAdminUsers();
-      }
-    }
-
-    const partners=await c.rpc('admin_list_partner_applications',{p_limit:100,p_offset:0});
-    const partnerBody=q('[data-admin-partners]');
-    if(partnerBody&&!partners.error){partnerBody.innerHTML='';(partners.data||[]).forEach(row=>{
-      const tr=document.createElement('tr');
-      tr.innerHTML=`<td><strong>${escapeHtml(`${row.first_name||''} ${row.last_name||''}`.trim()||'Sin nombre')}</strong><small>${escapeHtml(row.email||'')}</small></td><td>${escapeHtml(row.professional_role||'—')}</td><td>${escapeHtml(row.province||'—')}</td><td><select class="admin-select" data-partner-status-control="${escapeHtml(row.id)}">${Object.entries(adminPartnerOptions).map(([v,l])=>`<option value="${v}"${row.status===v?' selected':''}>${l}</option>`).join('')}</select></td><td>${new Intl.DateTimeFormat('es-ES',{dateStyle:'short'}).format(new Date(row.submitted_at))}</td><td><button class="btn btn-outline btn-small" data-partner-save="${escapeHtml(row.id)}">Guardar</button></td>`;partnerBody.appendChild(tr)
-      });if(!partnerBody.children.length)partnerBody.innerHTML='<tr><td colspan="6"><div class="empty-state">No hay solicitudes Partner.</div></td></tr>';
-    }
-
-    const activity=await c.rpc('admin_activity_by_application',{p_days:30});
-    const activityBody=q('[data-admin-activity]');
-    if(activityBody){activityBody.innerHTML='';if(!activity.error)(activity.data||[]).forEach(row=>{const tr=document.createElement('tr');tr.innerHTML=`<td><strong>${escapeHtml(row.application_name)}</strong><small>${escapeHtml(row.application_slug)}</small></td><td>${Number(row.opens||0)}</td><td>${Number(row.unique_users||0)}</td><td>${row.last_open?new Intl.DateTimeFormat('es-ES',{dateStyle:'short',timeStyle:'short'}).format(new Date(row.last_open)):'—'}</td>`;activityBody.appendChild(tr)});if(!activityBody.children.length)activityBody.innerHTML='<tr><td colspan="4"><div class="empty-state">Todavía no hay actividad registrada.</div></td></tr>'}
+    const users=await c.rpc('admin_list_users',{p_limit:100,p_offset:0,p_search:null});
+    const tbody=q('[data-admin-users]');if(tbody&&!users.error){tbody.innerHTML='';(users.data||[]).forEach(row=>{const tr=document.createElement('tr');tr.innerHTML=`<td><strong>${escapeHtml(`${row.first_name||''} ${row.last_name||''}`.trim()||'Sin nombre')}</strong><small>${escapeHtml(row.email||'')}</small></td><td>${escapeHtml(row.professional_role||'—')}</td><td><span class="tag">${escapeHtml(statusLabel[row.account_status]||row.account_status)}</span></td><td>${row.last_sign_in_at?new Intl.DateTimeFormat('es-ES',{dateStyle:'short'}).format(new Date(row.last_sign_in_at)):'—'}</td><td>${Number(row.application_count||0)}</td><td>${escapeHtml(partnerLabel[row.partner_status]||row.partner_status)}</td><td>${escapeHtml(row.account_role)}</td>`;tbody.appendChild(tr)});if(!tbody.children.length)tbody.innerHTML='<tr><td colspan="7"><div class="empty-state">Todavía no hay usuarios.</div></td></tr>'}
+    const payments=await c.rpc('admin_list_payment_requests',{p_status:'pending',p_limit:100});
+    const payBody=q('[data-admin-payments]');if(payBody&&!payments.error){payBody.innerHTML='';(payments.data||[]).forEach(row=>{const tr=document.createElement('tr');tr.innerHTML=`<td><strong>${escapeHtml(row.reference)}</strong></td><td><strong>${escapeHtml(row.customer_name||'Sin nombre')}</strong><small>${escapeHtml(row.email||'')}</small></td><td>${escapeHtml(row.application_name)}</td><td>${row.billing_period==='yearly'?'Anual':'Mensual'}</td><td>${(Number(row.amount_cents)/100).toLocaleString('es-ES',{style:'currency',currency:'EUR'})}</td><td>${row.method==='bizum'?'Bizum':'Transferencia'}</td><td>${new Intl.DateTimeFormat('es-ES',{dateStyle:'short',timeStyle:'short'}).format(new Date(row.requested_at))}</td><td><button class="btn btn-primary btn-small" data-payment-review="${row.id}" data-approve="true">Validar</button> <button class="btn btn-outline btn-small" data-payment-review="${row.id}" data-approve="false">Rechazar</button></td>`;payBody.appendChild(tr)});if(!payBody.children.length)payBody.innerHTML='<tr><td colspan="8"><div class="empty-state">No hay pagos pendientes.</div></td></tr>';qa('[data-payment-review]',payBody).forEach(btn=>btn.addEventListener('click',async()=>{btn.disabled=true;const {error}=await c.rpc('admin_review_payment_request',{p_request_id:btn.dataset.paymentReview,p_approve:btn.dataset.approve==='true',p_notes:null});if(error){showToast(errorText(error));btn.disabled=false;return}showToast(btn.dataset.approve==='true'?'Pago validado y PRO activado.':'Solicitud rechazada.');await fillAdmin()}))}
+    const partners=await c.rpc('admin_list_partner_applications',{p_limit:50,p_offset:0});
+    const partnerBody=q('[data-admin-partners]');if(partnerBody&&!partners.error){partnerBody.innerHTML='';(partners.data||[]).forEach(row=>{const tr=document.createElement('tr');tr.innerHTML=`<td><strong>${escapeHtml(`${row.first_name||''} ${row.last_name||''}`.trim()||'Sin nombre')}</strong><small>${escapeHtml(row.email||'')}</small></td><td>${escapeHtml(row.professional_role||'—')}</td><td>${escapeHtml(row.province||'—')}</td><td>${escapeHtml(partnerLabel[row.status]||row.status)}</td><td>${new Intl.DateTimeFormat('es-ES',{dateStyle:'short'}).format(new Date(row.submitted_at))}</td>`;partnerBody.appendChild(tr)});if(!partnerBody.children.length)partnerBody.innerHTML='<tr><td colspan="5"><div class="empty-state">No hay solicitudes pendientes.</div></td></tr>'}
   }
-
-  function renderAdminUsers(){
-    const tbody=q('[data-admin-users]');if(!tbody)return;
-    const statusFilter=q('[data-admin-status-filter]')?.value||'';
-    const rows=adminUsersCache.filter(row=>!statusFilter||row.account_status===statusFilter);
-    tbody.innerHTML='';rows.forEach(row=>{
-      const tr=document.createElement('tr');tr.dataset.userId=row.id;
-      tr.innerHTML=`<td><strong>${escapeHtml(`${row.first_name||''} ${row.last_name||''}`.trim()||'Sin nombre')}</strong><small>${escapeHtml(row.email||'')}</small></td><td>${escapeHtml(row.professional_role||'—')}</td><td><select class="admin-select" data-user-status="${escapeHtml(row.id)}">${Object.entries(adminStatusOptions).map(([v,l])=>`<option value="${v}"${row.account_status===v?' selected':''}>${l}</option>`).join('')}</select></td><td>${row.last_sign_in_at?new Intl.DateTimeFormat('es-ES',{dateStyle:'short',timeStyle:'short'}).format(new Date(row.last_sign_in_at)):'—'}</td><td>${Number(row.application_count||0)}</td><td>${escapeHtml(partnerLabel[row.partner_status]||row.partner_status)}</td><td><select class="admin-select" data-user-role="${escapeHtml(row.id)}">${Object.entries(adminRoleOptions).map(([v,l])=>`<option value="${v}"${row.account_role===v?' selected':''}>${l}</option>`).join('')}</select></td><td><div class="admin-actions"><button class="btn btn-outline btn-small" data-user-save="${escapeHtml(row.id)}">Guardar</button><button class="btn btn-ghost btn-small" data-access-toggle="${escapeHtml(row.id)}" data-access-slug="arm-cad">ARM CAD</button></div></td>`;tbody.appendChild(tr)
-    });if(!tbody.children.length)tbody.innerHTML='<tr><td colspan="8"><div class="empty-state">No hay usuarios que coincidan con el filtro.</div></td></tr>';
-  }
-
-  q('[data-admin-refresh]')?.addEventListener('click',()=>fillAdmin(q('[data-admin-search]')?.value.trim()||''));
-  q('[data-admin-search]')?.addEventListener('input',e=>{clearTimeout(window.__armAdminSearch);window.__armAdminSearch=setTimeout(()=>fillAdmin(e.target.value.trim()),350)});
-  q('[data-admin-status-filter]')?.addEventListener('change',renderAdminUsers);
-  q('[data-admin-users]')?.addEventListener('click',async e=>{
-    const save=e.target.closest('[data-user-save]');const access=e.target.closest('[data-access-toggle]');if(!save&&!access)return;
-    const c=await clientOrMessage();if(!c)return;
-    if(save){const id=save.dataset.userSave,status=q(`[data-user-status="${CSS.escape(id)}"]`)?.value,role=q(`[data-user-role="${CSS.escape(id)}"]`)?.value;save.disabled=true;const a=await c.rpc('admin_set_user_status',{p_user_id:id,p_status:status});const b=a.error?null:await c.rpc('admin_set_user_role',{p_user_id:id,p_role:role});save.disabled=false;if(a.error||b?.error){showToast(errorText(a.error||b.error));return}showToast('Usuario actualizado.');await fillAdmin(q('[data-admin-search]')?.value.trim()||'')}
-    if(access){const id=access.dataset.accessToggle,slug=access.dataset.accessSlug;const desired=confirm('Aceptar: permitir ARM CAD.\nCancelar: bloquear ARM CAD.')?'allowed':'blocked';const result=await c.rpc('admin_set_application_access',{p_user_id:id,p_slug:slug,p_status:desired,p_notes:'Gestionado desde ARM Admin'});if(result.error){showToast(errorText(result.error));return}showToast(desired==='allowed'?'Acceso a ARM CAD permitido.':'Acceso a ARM CAD bloqueado.');await fillAdmin(q('[data-admin-search]')?.value.trim()||'')}
-  });
-  q('[data-admin-partners]')?.addEventListener('click',async e=>{const btn=e.target.closest('[data-partner-save]');if(!btn)return;const id=btn.dataset.partnerSave,status=q(`[data-partner-status-control="${CSS.escape(id)}"]`)?.value,c=await clientOrMessage();if(!c)return;btn.disabled=true;const result=await c.rpc('admin_set_partner_status',{p_application_id:id,p_status:status,p_internal_notes:''});btn.disabled=false;if(result.error){showToast(errorText(result.error));return}showToast('Solicitud Partner actualizada.');await fillAdmin(q('[data-admin-search]')?.value.trim()||'')});
   const escapeHtml=(value)=>String(value??'').replace(/[&<>'"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));
+  q('[data-admin-refresh]')?.addEventListener('click',()=>location.reload());
 
   (async()=>{
     notices();await loadAuth();
     if(!(await redirectGuards()))return;
-    updateUserUI();bindAccountMenus();await fillAccount();await fillAdmin();
+    updateUserUI();await fillAccount();await fillLicense();await fillAdmin();
     const c=client;
-    c?.auth.onAuthStateChange((_event,nextSession)=>{session=nextSession;user=nextSession?.user||null;if(!nextSession)profile=null;updateUserUI();bindAccountMenus();closeAccountMenu()});
+    c?.auth.onAuthStateChange((_event,nextSession)=>{session=nextSession;user=nextSession?.user||null;if(!nextSession)profile=null;updateUserUI()});
   })();
 })();

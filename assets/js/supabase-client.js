@@ -31,7 +31,7 @@
       if(!valid(config)) throw new Error('Supabase todavía no está configurado. Revisa /api/public-config o assets/js/config.js.');
       STATE.client=window.supabase.createClient(config.supabaseUrl,config.supabasePublishableKey,{
         auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true},
-        global:{headers:{'X-Client-Info':'arm-platform-web/5.3'}}
+        global:{headers:{'X-Client-Info':'arm-platform-web/5.2'}}
       });
       return STATE.client;
     })();
