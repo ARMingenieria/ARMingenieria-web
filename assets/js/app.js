@@ -189,7 +189,7 @@
     const method=q('[data-payment-method]')?.value||'bizum'; const {data,error}=await c.rpc('create_payment_request',{p_slug:'arm-cad',p_period:selectedUpgradePlan,p_method:method});
     if(error){btn.disabled=false;msg.className='form-message show error';msg.textContent=errorText(error);return}
     const pr=Array.isArray(data)?data[0]:data; msg.className='form-message show success';msg.textContent=`Solicitud ${pr.reference} registrada. ARM validará el pago antes de activar PRO.`;
-    try{await fetch('/api/payment-request-notify',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${session.access_token}`},body:JSON.stringify({paymentRequestId:pr.id})})}catch(_e){}
+    try{await fetch('https://arm-pagos.alejandro-c23.workers.dev/api/payment-request-notify',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${session.access_token}`},body:JSON.stringify({paymentRequestId:pr.id})})}catch(_e){}
     btn.disabled=false;
   });
 
