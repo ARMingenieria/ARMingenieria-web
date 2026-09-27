@@ -153,14 +153,35 @@
   });
 
   qa('[data-logout]').forEach(b=>b.addEventListener('click',async e=>{e.preventDefault();const c=await clientOrMessage();if(c)await c.auth.signOut();location.href=route('index.html')}));
+  // Apertura de ARM CAD con transferencia de sesión entre orígenes mediante postMessage.
+  // Los tokens nunca se colocan en la URL ni se almacenan en ARM WEB fuera de Supabase.
+  const CAD_ORIGIN='https://arm-cad.alejandro-c23.workers.dev';
+  const CAD_HANDOFF='ARM_CAD_SESSION_V1';
   qa('[data-tool-open]').forEach(a=>a.addEventListener('click',async e=>{
-    e.preventDefault();const dest=a.dataset.returnTo||a.getAttribute('href'),slug=a.dataset.application||'arm-cad';
-    const c=await clientOrMessage();if(!c)return;
-    const {data:{session:s}}=await c.auth.getSession();
-    if(!s){location.href=route(`acceso/index.html?returnTo=${encodeURIComponent(dest)}`);return}
-    const {data,error}=await c.rpc('can_access_application',{p_slug:slug});
-    if(error||data!==true){showToast('Tu cuenta no tiene acceso a esta herramienta.');return}
-    location.href=route(dest);
+    e.preventDefault();
+    const slug=a.dataset.application||'arm-cad';
+    if(slug!=='arm-cad'){location.href=route(a.dataset.returnTo||a.getAttribute('href'));return}
+    // Abrir dentro del gesto de usuario: evita el bloqueo de ventanas en Android/iOS.
+    const cad=window.open(CAD_ORIGIN+'/','_blank');
+    if(!cad){showToast('Permite las ventanas emergentes para abrir ARM CAD.');return}
+    const c=await clientOrMessage();
+    if(!c){cad.close();return}
+    const {data:{session:s},error:sessionError}=await c.auth.getSession();
+    if(sessionError||!s){cad.close();location.href=route('acceso/index.html?returnTo=aplicaciones/index.html');return}
+    const {data:allowed,error}=await c.rpc('can_access_application',{p_slug:slug});
+    if(error||allowed!==true){cad.close();showToast('Tu cuenta no tiene acceso a esta herramienta.');return}
+    let completed=false;
+    const handler=async event=>{
+      if(event.origin!==CAD_ORIGIN||event.source!==cad||event.data?.type!=='ARM_CAD_READY_V1'||completed)return;
+      completed=true;
+      window.removeEventListener('message',handler);
+      const {data:{session:current}}=await c.auth.getSession();
+      if(!current){showToast('La sesión ha caducado. Inicia sesión de nuevo.');return}
+      cad.postMessage({type:CAD_HANDOFF,access_token:current.access_token,refresh_token:current.refresh_token},CAD_ORIGIN);
+    };
+    window.addEventListener('message',handler);
+    // La ventana CAD anuncia que está lista; no se transmite nada a otros orígenes.
+    setTimeout(()=>window.removeEventListener('message',handler),60000);
   }));
 
   const modal=q('[data-partner-modal]');qa('[data-partner-info]').forEach(b=>b.addEventListener('click',()=>{modal?.classList.add('open');modal?.setAttribute('aria-hidden','false');document.body.style.overflow='hidden'}));qa('[data-modal-close]').forEach(b=>b.addEventListener('click',closeModal));modal?.addEventListener('click',e=>{if(e.target===modal)closeModal()});document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
