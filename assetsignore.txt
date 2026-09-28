@@ -1,0 +1,15 @@
+.git/
+.git/**
+.wrangler/
+.wrangler/**
+.dev.vars*
+.env*
+*.sql
+supabase/
+supabase/**
+docs/
+docs/**
+README*
+IMPORTANTE-CONFIG.txt
+INTEGRACION_EMPRESA_HVAC_2026-09-28.txt
+wrangler.toml
