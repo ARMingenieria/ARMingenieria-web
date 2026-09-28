@@ -214,6 +214,36 @@
     btn.disabled=false;
   });
 
+  let selectedHvacPlan='yearly';
+  async function fillHvacLicense(){
+    if(!q('[data-hvac-tier]')||!user)return;
+    const c=await clientOrMessage();if(!c)return;
+    const tier=q('[data-hvac-tier]'),txt=q('[data-hvac-license-text]');
+    const {data,error}=await c.rpc('my_application_license',{p_slug:'arm-hvac-ducts'});
+    if(error){txt.textContent='No se ha podido consultar la licencia de ARM HVAC DUCTS.';return}
+    const lic=Array.isArray(data)?data[0]:data,pro=Boolean(lic?.is_pro);
+    tier.textContent=pro?'PRO':'FREE';
+    txt.textContent=pro?`PRO activo${lic?.expires_at?' hasta '+new Intl.DateTimeFormat('es-ES',{dateStyle:'long'}).format(new Date(lic.expires_at)):''}.`:'ARM HVAC DUCTS Free activo. PRO desbloquea DXF, Word/Docs y Excel.';
+    qa('[data-hvac-plan]').forEach(b=>b.hidden=pro);
+    const box=q('[data-hvac-payment]');if(box&&pro)box.hidden=true;
+  }
+  qa('[data-hvac-plan]').forEach(b=>b.addEventListener('click',()=>{
+    selectedHvacPlan=b.dataset.hvacPlan||'yearly';
+    const box=q('[data-hvac-payment]');if(box){box.hidden=false;box.scrollIntoView({behavior:'smooth',block:'nearest'})}
+    const amount=q('[data-hvac-payment-amount]');if(amount)amount.textContent=selectedHvacPlan==='yearly'?'39,99 €':'5,99 €';
+  }));
+  q('[data-hvac-payment-submit]')?.addEventListener('click',async()=>{
+    const c=await clientOrMessage();if(!c||!user)return;
+    const btn=q('[data-hvac-payment-submit]'),msg=q('[data-hvac-payment-message]');btn.disabled=true;msg.className='form-message';msg.textContent='Registrando solicitud…';
+    const method=q('[data-hvac-payment-method]')?.value||'bizum';
+    const {data,error}=await c.rpc('create_payment_request',{p_slug:'arm-hvac-ducts',p_period:selectedHvacPlan,p_method:method});
+    if(error){btn.disabled=false;msg.className='form-message show error';msg.textContent=errorText(error);return}
+    const pr=Array.isArray(data)?data[0]:data;
+    msg.className='form-message show success';msg.textContent=`Solicitud ${pr.reference} registrada. Usa esa referencia como concepto del pago. ARM validará el ingreso antes de activar PRO.`;
+    try{await fetch('https://arm-pagos.alejandro-c23.workers.dev/api/payment-request-notify',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${session.access_token}`},body:JSON.stringify({paymentRequestId:pr.id})})}catch(_e){}
+    btn.disabled=false;
+  });
+
   async function fillAdmin(){
     if(!body.hasAttribute('data-requires-admin')||profile?.account_role!=='admin')return;
     const c=await clientOrMessage();if(!c)return;
@@ -270,8 +300,20 @@
   (async()=>{
     notices();await loadAuth();
     if(!(await redirectGuards()))return;
-    updateUserUI();await fillAccount();await fillLicense();await fillAdmin();
+    updateUserUI();await fillAccount();await fillLicense();await fillHvacLicense();await fillAdmin();
     const c=client;
     c?.auth.onAuthStateChange((_event,nextSession)=>{session=nextSession;user=nextSession?.user||null;if(!nextSession)profile=null;updateUserUI()});
   })();
+})();
+
+/* ARM WEB · Cuenta Empresa BOSS · 2026-09-28 */
+(()=>{
+ const W=window.ARM_PAGOS_WORKER||'https://arm-pagos.alejandro-c23.workers.dev';
+ const form=document.querySelector('[data-company-setup]'); if(!form)return;
+ const msg=document.querySelector('[data-company-message]'),list=document.querySelector('[data-company-sessions]');
+ async function bossToken(){try{const c=await window.ARM_SUPABASE?.getClient?.();if(!c)return '';const {data}=await c.auth.getSession();return data?.session?.access_token||''}catch(_){return ''}}
+ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ async function load(){const t=await bossToken();if(!t){list.innerHTML='<p class="arm-muted">Inicia sesión como BOSS para gestionar sesiones.</p>';return}try{const r=await fetch(W+'/company/sessions',{headers:{Authorization:'Bearer '+t}}),d=await r.json();if(!r.ok)throw new Error(d.error||'Error');list.innerHTML=(d.sessions||[]).map(s=>`<div class="arm-session"><span><strong>${esc(s.device_label||'Dispositivo')}</strong><br><small>${s.product_slug==='cad'?'ARM CAD':'ARM HVAC DUCTS'} · ${new Date(s.last_seen_at).toLocaleString('es-ES')}</small></span><button class="btn btn-outline btn-small" data-revoke="${esc(s.id)}">Cerrar</button></div>`).join('')||'<p class="arm-muted">No hay sesiones USER activas.</p>';list.querySelectorAll('[data-revoke]').forEach(b=>b.onclick=async()=>{await fetch(W+'/company/sessions/'+b.dataset.revoke+'/revoke',{method:'POST',headers:{Authorization:'Bearer '+t}});load()})}catch(e){list.innerHTML='<p class="form-message">'+esc(e.message)+'</p>'}}
+ form.addEventListener('submit',async e=>{e.preventDefault();const t=await bossToken();if(!t){msg.textContent='Sesión BOSS no disponible.';return}const fd=new FormData(form);msg.textContent='Guardando…';try{const r=await fetch(W+'/company/setup',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+t},body:JSON.stringify({companyName:fd.get('companyName'),userPassword:fd.get('userPassword')})}),d=await r.json();if(!r.ok)throw new Error(d.error||'No se pudo guardar');msg.textContent='Acceso USER guardado correctamente.';form.elements.userPassword.value='';load()}catch(err){msg.textContent=err.message}});
+ load();
 })();

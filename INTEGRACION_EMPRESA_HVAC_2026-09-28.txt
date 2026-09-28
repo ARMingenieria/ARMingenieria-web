@@ -1,0 +1,18 @@
+ARM WEB · Integración Empresa + HVAC · 2026-09-28
+
+Incluido:
+- Catálogo multiapp ARM CAD + ARM HVAC DUCTS.
+- Precios individuales CAD 7,99 €/mes / 49,99 €/año.
+- Precios individuales HVAC 5,99 €/mes / 39,99 €/año.
+- Configuración central de productos y pagos.
+- Cuenta Empresa BOSS: alta/cambio de contraseña USER y gestión de sesiones.
+- Acceso Empresa USER separado.
+- Worker arm-pagos conectado a /company/*.
+- Heartbeat USER cada 180 s; Worker libera plaza tras 10 min sin actividad.
+- Datos de pago centralizados.
+
+PENDIENTE ANTES DE PUBLICAR HVAC:
+- Incorporar dentro del despliegue hvac.arm-ingenieria.com el HTML real de ARM HVAC DUCTS 1.1.119.
+- Conectar dentro de HVAC las capacidades FREE/PRO al backend. No se ha falseado esta protección en ARM WEB.
+
+No se ha modificado el motor ARM CAD.
