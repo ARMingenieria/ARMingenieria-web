@@ -1,6 +1,6 @@
 window.ARM_PRODUCTS=Object.freeze({
   cad:{slug:'cad',appSlug:'arm-cad',name:'ARM CAD',monthly:7.99,yearly:49.99,url:'https://arm-cad.alejandro-c23.workers.dev/'},
-  hvac_ducts:{slug:'hvac_ducts',appSlug:'arm-hvac-ducts',name:'ARM HVAC DUCTS',monthly:5.99,yearly:39.99,url:'https://hvac.arm-ingenieria.com/'}
+  hvac_ducts:{slug:'hvac_ducts',appSlug:'arm-hvac-ducts',name:'ARM HVAC DUCTS',monthly:5.99,yearly:39.99,url:'/hvac/'}
 });
 window.ARM_COMPANY_PRICES=Object.freeze({
   cad:{5:224.99,10:399.99,15:524.99,20:649.99,30:899.99,40:1099.99,50:1300,100:2000,101:2500},
