@@ -293,7 +293,34 @@
       showToast('Licencia actualizada.');await fillAdmin();
     }));
     const payments=await c.rpc('admin_list_payment_requests',{p_status:'pending',p_limit:100});
-    const payBody=q('[data-admin-payments]');if(payBody&&!payments.error){payBody.innerHTML='';(payments.data||[]).forEach(row=>{const tr=document.createElement('tr');tr.innerHTML=`<td><strong>${escapeHtml(row.reference)}</strong></td><td><strong>${escapeHtml(row.customer_name||'Sin nombre')}</strong><small>${escapeHtml(row.email||'')}</small></td><td>${escapeHtml(row.application_name)}</td><td>${row.billing_period==='yearly'?'Anual':'Mensual'}</td><td>${(Number(row.amount_cents)/100).toLocaleString('es-ES',{style:'currency',currency:'EUR'})}</td><td>${row.method==='bizum'?'Bizum':'Transferencia'}</td><td>${new Intl.DateTimeFormat('es-ES',{dateStyle:'short',timeStyle:'short'}).format(new Date(row.requested_at))}</td><td><button class="btn btn-primary btn-small" data-payment-review="${row.id}" data-approve="true">Validar</button> <button class="btn btn-outline btn-small" data-payment-review="${row.id}" data-approve="false">Rechazar</button></td>`;payBody.appendChild(tr)});if(!payBody.children.length)payBody.innerHTML='<tr><td colspan="8"><div class="empty-state">No hay pagos pendientes.</div></td></tr>';qa('[data-payment-review]',payBody).forEach(btn=>btn.addEventListener('click',async()=>{btn.disabled=true;const {error}=await c.rpc('admin_review_payment_request',{p_request_id:btn.dataset.paymentReview,p_approve:btn.dataset.approve==='true',p_notes:null});if(error){showToast(errorText(error));btn.disabled=false;return}showToast(btn.dataset.approve==='true'?'Pago validado y PRO activado.':'Solicitud rechazada.');await fillAdmin()}))}
+    const payBody=q('[data-admin-payments]');if(payBody&&!payments.error){payBody.innerHTML='';(payments.data||[]).forEach(row=>{const tr=document.createElement('tr');tr.innerHTML=`<td><strong>${escapeHtml(row.reference)}</strong></td><td><strong>${escapeHtml(row.customer_name||'Sin nombre')}</strong><small>${escapeHtml(row.email||'')}</small></td><td>${escapeHtml(row.application_name)}</td><td>${row.billing_period==='yearly'?'Anual':'Mensual'}</td><td>${(Number(row.amount_cents)/100).toLocaleString('es-ES',{style:'currency',currency:'EUR'})}</td><td>${row.method==='bizum'?'Bizum':'Transferencia'}</td><td>${new Intl.DateTimeFormat('es-ES',{dateStyle:'short',timeStyle:'short'}).format(new Date(row.requested_at))}</td><td><button class="btn btn-primary btn-small" data-payment-review="${row.id}" data-approve="true">Validar</button> <button class="btn btn-outline btn-small" data-payment-review="${row.id}" data-approve="false">Rechazar</button></td>`;payBody.appendChild(tr)});if(!payBody.children.length)payBody.innerHTML='<tr><td colspan="8"><div class="empty-state">No hay pagos pendientes.</div></td></tr>';qa('[data-payment-review]',payBody).forEach(btn=>btn.addEventListener('click',async()=>{
+      btn.disabled=true;
+      const approve=btn.dataset.approve==='true';
+      const paymentRequestId=btn.dataset.paymentReview;
+      const {error}=await c.rpc('admin_review_payment_request',{p_request_id:paymentRequestId,p_approve:approve,p_notes:null});
+      if(error){showToast(errorText(error));btn.disabled=false;return}
+      if(approve){
+        let mailOk=true;
+        try{
+          const {data:{session:adminSession}}=await c.auth.getSession();
+          if(!adminSession?.access_token)throw new Error('Sesión de administrador no disponible');
+          const nr=await fetch('https://arm-pagos.alejandro-c23.workers.dev/api/payment-approved-notify',{
+            method:'POST',
+            headers:{'Content-Type':'application/json','Authorization':`Bearer ${adminSession.access_token}`},
+            body:JSON.stringify({paymentRequestId})
+          });
+          const nd=await nr.json().catch(()=>({}));
+          if(!nr.ok)throw new Error(nd.error||'No se pudo enviar el correo de activación');
+        }catch(e){
+          mailOk=false;
+          console.warn('ARM payment activation email:',e);
+        }
+        showToast(mailOk?'Pago validado, PRO activado y correo enviado.':'Pago validado y PRO activado. El correo de activación no pudo enviarse.');
+      }else{
+        showToast('Solicitud rechazada.');
+      }
+      await fillAdmin();
+    }))}
     const partners=await c.rpc('admin_list_partner_applications',{p_limit:50,p_offset:0});
     const partnerBody=q('[data-admin-partners]');if(partnerBody&&!partners.error){partnerBody.innerHTML='';(partners.data||[]).forEach(row=>{const tr=document.createElement('tr');tr.innerHTML=`<td><strong>${escapeHtml(`${row.first_name||''} ${row.last_name||''}`.trim()||'Sin nombre')}</strong><small>${escapeHtml(row.email||'')}</small></td><td>${escapeHtml(row.professional_role||'—')}</td><td>${escapeHtml(row.province||'—')}</td><td>${escapeHtml(partnerLabel[row.status]||row.status)}</td><td>${new Intl.DateTimeFormat('es-ES',{dateStyle:'short'}).format(new Date(row.submitted_at))}</td>`;partnerBody.appendChild(tr)});if(!partnerBody.children.length)partnerBody.innerHTML='<tr><td colspan="5"><div class="empty-state">No hay solicitudes pendientes.</div></td></tr>'}
   }
