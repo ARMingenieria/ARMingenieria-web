@@ -81,13 +81,22 @@
     if(notice&&messages[notice])showToast(messages[notice]);
   }
 
-  q('[data-login-form]')?.addEventListener('submit',async e=>{
+  const loginForm=q('[data-login-form]');
+  const loginIdentifier=q('#login-email',loginForm||document);
+  const companyProductBox=q('[data-company-login-product]',loginForm||document);
+  const syncLoginMode=()=>{
+    if(!loginIdentifier||!companyProductBox)return;
+    companyProductBox.hidden=loginIdentifier.value.trim().includes('@')||!loginIdentifier.value.trim();
+  };
+  loginIdentifier?.addEventListener('input',syncLoginMode);
+  syncLoginMode();
+
+  loginForm?.addEventListener('submit',async e=>{
     e.preventDefault();const form=e.currentTarget;
     const fd=new FormData(form),identifier=String(fd.get('email')||'').trim(),password=String(fd.get('password')||'');
     if(!identifier||!password){formMessage(form,'Completa el correo/USER y la contraseña.');return}
     setBusy(form,true,'Accediendo…');
 
-    // Cuenta ARM/BOSS: continúa usando Supabase Auth sin cambios.
     if(identifier.includes('@')){
       const c=await clientOrMessage(form);if(!c){setBusy(form,false);return}
       const email=identifier.toLowerCase();
@@ -100,14 +109,8 @@
       return;
     }
 
-    // USER Empresa: no existe como usuario de Supabase Auth. Autentica contra arm-pagos.
+    const productSlug=String(fd.get('product')||'cad');
     const W=window.ARM_PAGOS_WORKER||'https://arm-pagos.alejandro-c23.workers.dev';
-    const productSlug=new URLSearchParams(location.search).get('product');
-    if(!['cad','hvac_ducts'].includes(productSlug||'')){
-      setBusy(form,false);
-      formMessage(form,'Para acceder como USER Empresa, entra desde la aplicación ARM CAD o ARM HVAC DUCTS.');
-      return;
-    }
     try{
       const r=await fetch(W+'/company/member-login',{
         method:'POST',
@@ -116,24 +119,17 @@
           username:identifier,
           password,
           productSlug,
-          deviceLabel:`${navigator.platform||'Web'} · ${navigator.userAgent.includes('Mobile')?'Móvil':'Navegador'}`
+          deviceLabel:`${navigator.platform||'Web'} · ${/Mobile|Android|iPhone|iPad/i.test(navigator.userAgent)?'Móvil':'Navegador'}`
         })
       });
       const d=await r.json().catch(()=>({}));
       if(!r.ok)throw new Error(d.error||'USER o contraseña incorrectos.');
-      if(!d.sessionToken)throw new Error('No se pudo crear la sesión USER.');
-
-      // La sesión USER pertenece al Worker, no a Supabase Auth.
-      sessionStorage.setItem('arm_company_user_session_v1',JSON.stringify({
-        token:d.sessionToken,
-        productSlug:d.productSlug||productSlug,
-        username:d.username||identifier,
-        expiresAt:d.expiresAt||null
-      }));
-
+      if(!d.token)throw new Error('No se pudo crear la sesión USER.');
       const target=d.productSlug||productSlug;
-      if(target==='cad') location.href='https://arm-cad.alejandro-c23.workers.dev/';
-      else location.href='https://arm-hvac-ducts.alejandro-c23.workers.dev/';
+      const base=target==='cad'
+        ?'https://arm-cad.alejandro-c23.workers.dev/'
+        :'https://arm-hvac-ducts.alejandro-c23.workers.dev/';
+      location.href=base+'#company_token='+encodeURIComponent(d.token);
     }catch(error){
       setBusy(form,false);
       formMessage(form,error.message||'No se pudo iniciar sesión como USER Empresa.');
