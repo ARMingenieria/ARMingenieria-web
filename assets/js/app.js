@@ -82,16 +82,62 @@
   }
 
   q('[data-login-form]')?.addEventListener('submit',async e=>{
-    e.preventDefault();const form=e.currentTarget,c=await clientOrMessage(form);if(!c)return;
-    const fd=new FormData(form),email=String(fd.get('email')||'').trim().toLowerCase(),password=String(fd.get('password')||'');
-    if(!email||!password){formMessage(form,'Completa el correo y la contraseña.');return}
+    e.preventDefault();const form=e.currentTarget;
+    const fd=new FormData(form),identifier=String(fd.get('email')||'').trim(),password=String(fd.get('password')||'');
+    if(!identifier||!password){formMessage(form,'Completa el correo/USER y la contraseña.');return}
     setBusy(form,true,'Accediendo…');
-    const {data,error}=await c.auth.signInWithPassword({email,password});
-    if(error){setBusy(form,false);formMessage(form,errorText(error));return}
-    session=data.session;user=data.user;
-    const p=await c.from('profiles').select('*').eq('id',user.id).maybeSingle();profile=p.data||null;
-    if(profile?.account_status&&profile.account_status!=='active'){await c.auth.signOut();setBusy(form,false);formMessage(form,'La cuenta no está activa. Contacta con ARM Ingeniería.');return}
-    location.href=safeReturnTo()||route('cuenta/index.html');
+
+    // Cuenta ARM/BOSS: continúa usando Supabase Auth sin cambios.
+    if(identifier.includes('@')){
+      const c=await clientOrMessage(form);if(!c){setBusy(form,false);return}
+      const email=identifier.toLowerCase();
+      const {data,error}=await c.auth.signInWithPassword({email,password});
+      if(error){setBusy(form,false);formMessage(form,errorText(error));return}
+      session=data.session;user=data.user;
+      const p=await c.from('profiles').select('*').eq('id',user.id).maybeSingle();profile=p.data||null;
+      if(profile?.account_status&&profile.account_status!=='active'){await c.auth.signOut();setBusy(form,false);formMessage(form,'La cuenta no está activa. Contacta con ARM Ingeniería.');return}
+      location.href=safeReturnTo()||route('cuenta/index.html');
+      return;
+    }
+
+    // USER Empresa: no existe como usuario de Supabase Auth. Autentica contra arm-pagos.
+    const W=window.ARM_PAGOS_WORKER||'https://arm-pagos.alejandro-c23.workers.dev';
+    const productSlug=new URLSearchParams(location.search).get('product');
+    if(!['cad','hvac_ducts'].includes(productSlug||'')){
+      setBusy(form,false);
+      formMessage(form,'Para acceder como USER Empresa, entra desde la aplicación ARM CAD o ARM HVAC DUCTS.');
+      return;
+    }
+    try{
+      const r=await fetch(W+'/company/member-login',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          username:identifier,
+          password,
+          productSlug,
+          deviceLabel:`${navigator.platform||'Web'} · ${navigator.userAgent.includes('Mobile')?'Móvil':'Navegador'}`
+        })
+      });
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok)throw new Error(d.error||'USER o contraseña incorrectos.');
+      if(!d.sessionToken)throw new Error('No se pudo crear la sesión USER.');
+
+      // La sesión USER pertenece al Worker, no a Supabase Auth.
+      sessionStorage.setItem('arm_company_user_session_v1',JSON.stringify({
+        token:d.sessionToken,
+        productSlug:d.productSlug||productSlug,
+        username:d.username||identifier,
+        expiresAt:d.expiresAt||null
+      }));
+
+      const target=d.productSlug||productSlug;
+      if(target==='cad') location.href='https://arm-cad.alejandro-c23.workers.dev/';
+      else location.href='https://arm-hvac-ducts.alejandro-c23.workers.dev/';
+    }catch(error){
+      setBusy(form,false);
+      formMessage(form,error.message||'No se pudo iniciar sesión como USER Empresa.');
+    }
   });
 
   q('[data-register-form]')?.addEventListener('submit',async e=>{
