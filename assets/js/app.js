@@ -234,7 +234,7 @@
     ['first_name','last_name','professional_role','country','province'].forEach(name=>{const input=form.elements[name];if(input)input.value=profile[name]||''});
     const c=await clientOrMessage();if(!c)return;
     const {count}=await c.from('applications').select('*',{count:'exact',head:true}).eq('status','published');
-    qa('[data-tools-count]').forEach(x=>x.textContent=String(count??0));
+    qa('[data-tools-count]').forEach(x=>x.textContent=String((count??0)+qa('[data-public-tool]').length));
   }
 
   let selectedUpgradePlan='yearly';
