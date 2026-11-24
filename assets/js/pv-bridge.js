@@ -1,0 +1,9 @@
+(()=>{'use strict';
+const PV='https://pv.arm-ingenieria.com', status=document.getElementById('pv-bridge-status'), button=document.getElementById('pv-connect');
+let nonce=null,client=null;
+if(!window.opener){status.textContent='Abre esta página desde ARM PV & BESS.';return;}
+window.addEventListener('message',e=>{if(e.origin!==PV||e.source!==window.opener||e.data?.type!=='ARM_PV_HELLO'||typeof e.data.nonce!=='string'||!/^[a-f0-9-]{36}$/.test(e.data.nonce))return;nonce=e.data.nonce;});
+const ready=()=>window.opener?.postMessage({type:'ARM_PV_READY'},PV);ready();const timer=setInterval(ready,800);window.addEventListener('pagehide',()=>clearInterval(timer));
+(async()=>{try{client=await window.ARM_SUPABASE.getClient();const {data,error}=await client.auth.getUser();if(error||!data?.user){location.replace('../acceso/index.html?returnTo=pv-acceso%2Findex.html');return;}const p=await client.from('profiles').select('account_status').eq('id',data.user.id).maybeSingle();if(p.error||p.data?.account_status!=='active'){status.textContent='No se ha podido verificar una cuenta activa.';return;}status.textContent='Cuenta ARM activa. Autoriza la conexión para continuar con tu proyecto.';button.hidden=false;}catch(e){status.textContent='No se pudo comprobar la sesión. Vuelve a abrir esta ventana.';}})();
+button.onclick=async()=>{if(!nonce||!window.opener){status.textContent='No se ha detectado la ventana de la aplicación. Vuelve a abrirla.';return;}button.disabled=true;try{const {data,error}=await client.auth.getSession();if(error||!data?.session)throw Error('Sesión no disponible');window.opener.postMessage({type:'ARM_PV_SESSION',nonce,access_token:data.session.access_token},PV);status.textContent='Conexión enviada. Vuelve a la aplicación.';window.close();}catch(e){status.textContent='No se pudo conectar la cuenta. Inténtalo de nuevo.';button.disabled=false;}};
+})();
